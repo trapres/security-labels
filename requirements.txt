@@ -1,0 +1,12 @@
+# Already present in .venv, pinned here for reproducibility.
+requests>=2.32
+pandas>=2.0
+numpy>=1.24
+scikit-learn>=1.3
+snorkel==0.9.9
+tqdm>=4.66
+python-dateutil>=2.9
+
+# Added for this project
+pyyaml>=6.0
+pyarrow>=14.0
