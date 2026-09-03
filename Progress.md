@@ -1,5 +1,10 @@
 # Progress — what it would take to reach 40 of 49
 
+> **Status:** mechanism A shipped as `lf_security_note_path` and verified —
+> gold votes **22 → 29**, majority vote **22 → 29**, LabelModel conversion
+> unchanged at **11**. The rest of this document is unchanged from the analysis
+> that produced that plan; its baseline is 22 of 49.
+
 Iteration 2 gets a positive vote on **22 of 49** gold fixes and converts **11**
 into a `security` label. This is an analysis of the other 27: what they are, why
 they are missed, and what each candidate mechanism would actually buy. Every
@@ -85,7 +90,7 @@ which for a 0.068% base rate is the honest way to read precision.
 
 | # | Mechanism | Gold gain | Measured cost | Firings per gold hit |
 | --- | --- | --- | --- | --- |
-| **A** | **Touches a `security/` or `advisories/` directory** — file list only, no diff needed | **+7** | 594 of 72,166 (0.82%) | ~85 |
+| **A** ✅ | **Touches a `security/` or `advisories/` directory** — file list only, no diff needed. **Shipped as `lf_security_note_path`.** | **+7** (verified) | 546 of 72,166 (0.76%) | ~78 |
 | **B** | Release commit whose range since the previous release contains a positively-voted commit | **+5** of 15 | 252 of 1,442 release commits | ~50 |
 | **B′** | Same, restricted to high-confidence positives (`lf_cve_id`, `lf_ghsa_id`, `lf_advisory_language`, `lf_vuln_class`) | +4 of 15 | 162 of 1,442 | ~40 |
 | **C** | Added patch text cites a **positively-labeled commit SHA** (release changelogs link their fixes) | **+2** of 15, **+1** merge | ~38 corpus firings | ~13 |
@@ -217,9 +222,16 @@ If you want one number to move, it is **22 → 11**, not **22 → 40**.
 
 ## Suggested order of work
 
-1. **`lf_security_note_path`** (mechanism A). Twenty minutes, +7 gold, no diff
-   needed, reads only the `files` column. Highest yield per line of code in this
-   entire analysis.
+1. ~~**`lf_security_note_path`** (mechanism A)~~ — **done.** Shipped and
+   verified: 546 corpus firings (0.76%), 7 gold hits, gold votes **22 → 29**,
+   majority vote **22 → 29**. The final form requires at least one non-doc file
+   in the commit, which drops 48 firings (Zephyr's
+   `doc/security/vulnerabilities.rst` commits, which document CVEs rather than
+   fix them) for zero loss of gold. **LabelModel conversion did not move: 11 of
+   49 before and after**, because the LF's learned accuracy is 0.274 like every
+   other positive, so its single vote yields `prob_security` ≈ 0.27 and loses to
+   the 0.5 threshold. Mechanism A validated the prediction in "The second
+   bottleneck" exactly.
 2. **Fix the model conversion.** Dependency structure or learned class balance.
    Doubles the value of every LF already written.
 3. **Re-attribute the release-commit gold labels** (recommendation 1). Turns 15

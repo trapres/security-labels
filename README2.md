@@ -15,16 +15,25 @@ Read `README.md` first for the pipeline. Read this for the current state.
 
 | | `README.md` as written | HEAD |
 | --- | --- | --- |
-| Labeling functions | 20 (message text only) | **38** = 20 message + 18 diff |
+| Labeling functions | 20 (message text only) | **39** = 21 message/metadata + 18 diff |
 | Signals available to an LF | `message`, `subject`, `files`, author, counts | + **patch text** (`diff_text`) |
 | Pipeline steps | 4 | 4 + 2 side steps (diff dump, diff sample) |
 | Gold recall (LabelModel) | 2 of 49 | **11 of 49** |
-| Gold recall (majority vote) | — | **22 of 49** |
+| Gold recall (majority vote) | — | **29 of 49** |
 
-`ALL_LFS` still contains exactly the original 20, unchanged, so
-`python -m commit_labels.label` and `Coverage_Iteration1.md` remain
-reproducible. The diff LFs live in `DIFF_LFS`, and `ALL_LFS_WITH_DIFF` is the
-union — nothing that reads `ALL_LFS` changed behaviour.
+`ALL_LFS` now holds **21**: the original 20 plus `lf_security_note_path`, which
+needs no diff and so belongs with the message/metadata set. `python -m
+commit_labels.label` therefore no longer reproduces the numbers in
+`Coverage_Iteration1.md` — that file is the 20-LF baseline and is preserved as
+such in git (`482126b`); regenerate it only if you want to retire the baseline.
+The diff LFs live in `DIFF_LFS`, and `ALL_LFS_WITH_DIFF` is the union.
+
+`lf_security_note_path` fires when a commit changes code *and* a file under a
+`security/` or `advisories/` directory. Measured on the full corpus: **546
+firings (0.76%), 7 gold hits** — every one of them a cpython `gh-151987` row,
+previously the largest single block of missed gold. It has the highest gold-hit
+count of any positive LF in the set; the next best is `lf_vuln_class` at 3. See
+`Progress.md` mechanism A.
 
 ### New files
 
@@ -33,10 +42,11 @@ union — nothing that reads `ALL_LFS` changed behaviour.
 | `gen_gold_md.py` | Dumps the gold set + CVE disclosures + diffs → `docs/cve-fix-commits.md` |
 | `fetch_diff_sample.py` | Builds the stratified diff sample → `data/interim/diff_sample.parquet` |
 | `gen_coverage_md.py` | Iteration-1 coverage report (20 message LFs, full corpus) |
-| `gen_coverage2_md.py` | Iteration-2 coverage report (38 LFs, diff sample) |
+| `gen_coverage2_md.py` | Diff-aware coverage report (all of `ALL_LFS_WITH_DIFF`, diff sample) |
 | `docs/cve-fix-commits.md` | 49 gold commits: raw `message`, `git show` diff, NVD/GHSA/OSV links |
 | `Coverage_Iteration1.md` | Baseline measurement of the shipped LFs |
-| `Coverage_Iteration2.md` | Same, with the diff LFs added, plus ablations |
+| `Coverage_Iteration2.md` | Same, with the 18 diff LFs added, plus ablations |
+| `Coverage_Iteration3.md` | Current: 39 LFs, after `lf_security_note_path` landed |
 
 ### New data artifacts (all under gitignored `data/`)
 
@@ -191,6 +201,26 @@ Two things to keep straight when comparing tables:
    deterministic function of two other LFs — so read the 32-LF row as an upper
    bound for this model class without an explicit dependency structure.
 
+### Iteration 3 — 39 LFs, after `lf_security_note_path` (same 5,451 commits)
+
+| LF set | LFs | Gold | Majority vote | Flagged | Flagged in control |
+| --- | --- | --- | --- | --- | --- |
+| message/metadata only | 21 | 1 of 49 | 16 of 49 | 321 | 0 |
+| message + 6 mitigation | 27 | 7 of 49 | 29 of 49 | 693 | 34 |
+| message + mitigation + conjunction | 33 | 11 of 49 | 29 of 49 | 834 | 87 |
+| all 39 (adds surface vetoes) | 39 | **11 of 49** | **29 of 49** | 834 | 87 |
+| diff LFs only | 18 | 11 of 49 | 18 of 49 | 430 | 95 |
+
+One LF, `lf_security_note_path`, moved majority vote from 22 to 29 and did not
+move the fitted model at all. That is the cleanest demonstration of the point
+above: **votes are cheap now, conversion is the constraint.** 29 of 49 rows have
+a positive vote and the LabelModel emits 11 of them, because the new LF's
+learned accuracy came out at 0.274 — the same sub-0.5 basin as every other
+positive — so its single vote yields `prob_security` ≈ 0.27.
+
+Full report: `Coverage_Iteration3.md`, generated with
+`gen_coverage2_md.py --iteration 3`.
+
 ---
 
 ## Corrections to `README.md`
@@ -262,7 +292,7 @@ rediscover. Numbers are the measured impact.
 .venv/bin/python gen_gold_md.py                                  # gold diffs + docs/cve-fix-commits.md
 .venv/bin/python gen_coverage_md.py                              # Coverage_Iteration1.md
 .venv/bin/python fetch_diff_sample.py --control 3000 --jobs 8    # diff_sample.parquet
-.venv/bin/python gen_coverage2_md.py                             # Coverage_Iteration2.md
+.venv/bin/python gen_coverage2_md.py --iteration 3               # Coverage_Iteration3.md
 ```
 
 Runtimes on the 12-repo / 72,166-commit corpus: `gen_gold_md.py` 3s warm,
@@ -316,11 +346,14 @@ with the old regexes.
 
 ## Open items, in priority order
 
-1. **Fix the model, not the LFs.** 22 of 49 gold fixes now get a positive vote
-   and the LabelModel converts 11. Try a dependency structure for the
-   deliberately-correlated groups (`lf_cve_id`/`lf_ghsa_id`/`lf_advisory_language`,
-   and each surface/mitigation/conjunction triple), or a learned class balance,
-   before adding a seventh vulnerability class.
+1. **Fix the model, not the LFs.** 29 of 49 gold fixes now get a positive vote
+   and the LabelModel converts 11 — mechanism A added 7 votes and 0 labels, so
+   this is now unambiguously the binding constraint. Try a dependency structure
+   for the deliberately-correlated groups
+   (`lf_cve_id`/`lf_ghsa_id`/`lf_advisory_language`, each
+   surface/mitigation/conjunction triple, and the new
+   `lf_security_note_path`/`lf_security_paths_and_fix` pair, which co-fire 227
+   times), or a learned class balance, before adding another mechanism.
 2. **Tighten the memory family.** `lf_diff_bounds_guard_added` fires on 4.17% of
    control and `lf_diff_memory_safety_fix` on 1.73% (≈1,250 corpus firings for 2
    gold hits). Require the guard and its rejection on *adjacent* lines rather
@@ -347,6 +380,9 @@ regenerated report rather than edited by hand:
   table.
 - **A new coverage iteration** → add a section under "What the numbers say now";
   keep the older iterations' numbers, since the point of this file is the delta.
+  Bump `--iteration` and add a matching entry to `CHANGES_SINCE` in
+  `gen_coverage2_md.py`, so re-running the same command reproduces the same
+  document rather than silently re-framing an old one.
 - **A README claim that measurement contradicts** → the corrections table, with
   the number that contradicts it.
 - **Time lost to a non-obvious failure** → the traps list. That section has the

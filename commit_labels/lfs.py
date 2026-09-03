@@ -259,6 +259,38 @@ def lf_security_paths_and_fix(x):
     return ABSTAIN
 
 
+# A dedicated directory for advisory notes: cpython's Misc/NEWS.d/next/Security,
+# a project's security/ or advisories/ tree. Narrower than SECURITY_PATH_RE,
+# which also matches auth/crypto/session source files.
+SECURITY_NOTE_DIR_RE = re.compile(r"(^|/)(security|advisories)/", re.IGNORECASE)
+
+
+@labeling_function()
+def lf_security_note_path(x):
+    """Changes code *and* a file under a security/ or advisories/ directory.
+
+    Projects that keep advisory notes in a dedicated directory hand you the
+    label. cpython's tarfile fix ships
+    ``Misc/NEWS.d/next/Security/2026-06-23-...rst`` next to ``Lib/tarfile.py``
+    and its message - "Pass filter_function to TarFile._extract_one()" - says
+    nothing about security, which is why the 7 rows of that fix and its
+    backports were the largest single block of missed gold.
+
+    ``lf_security_paths_and_fix`` does not cover this: it wants a fix verb in
+    the message, and there isn't one.
+
+    The non-doc requirement is load-bearing. Without it this also fires on
+    Zephyr's ``doc/security/vulnerabilities.rst`` commits, which *document*
+    CVEs rather than fix them: 48 extra corpus firings for zero extra gold, and
+    all of them in direct conflict with ``lf_docs_only`` (learned accuracy
+    1.00).
+    """
+    files = _files(x)
+    if not any(SECURITY_NOTE_DIR_RE.search(f) for f in files):
+        return ABSTAIN
+    return SECURITY if any(not _is_doc_path(f) for f in files) else ABSTAIN
+
+
 @labeling_function()
 def lf_bounds_check_in_parser(x):
     """Small change to a parser/decoder that adds a bounds or length check.
@@ -1027,6 +1059,7 @@ POSITIVE_LFS = [
     lf_advisory_language,
     lf_security_backport,
     lf_security_paths_and_fix,
+    lf_security_note_path,
     lf_bounds_check_in_parser,
     lf_crash_on_untrusted_input,
 ]
