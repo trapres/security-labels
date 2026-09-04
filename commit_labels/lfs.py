@@ -1026,6 +1026,48 @@ def lf_diff_dos_hardening_fix(x):
     return SECURITY if _dos_surface(x) and _dos_mitigated(x) else ABSTAIN
 
 
+# ---- Standalone diff LF: what the patch's own comments admit ---------
+COMMENT_LINE_RE = re.compile(r"^\s*(//|\*|/\*|#|--|;;)")
+# Named concurrency/lifecycle bug classes. These are the ones VULN_CLASS_RE
+# cannot use as-is: its `race condition` pattern demands a nearby
+# security/exploit/vuln word on the same line, which developer comments do not
+# supply. This is also the class gap Progress.md identified - CWE-416, 362,
+# 415, 476 - where the fix is ordering or locking and leaves no mitigation
+# token to match.
+CONCURRENCY_COMMENT_RE = re.compile(
+    r"race condition|data race|use[- ]after[- ]free|double[- ]free|"
+    r"deadlock|toctou|time[- ]of[- ]check",
+    re.IGNORECASE,
+)
+
+
+@labeling_function()
+def lf_diff_comment_names_concurrency_bug(x):
+    """An added code comment names a concurrency or lifetime bug class.
+
+    Mechanism D. The patch's comments are a channel nothing else reads, and
+    they are often franker than the commit message. The rfcomm fix
+    (`c67b59f891`) is 17 added lines of which most are a comment explaining
+    "avoid the race condition where the disconnection process is triggered by
+    both the local and peer devices at the same time"; its subject says only
+    "fix race condition in session disconnect", which `lf_vuln_class` rejects.
+
+    Vocabulary chosen by measurement, not taste. Over the 3,000-commit control
+    stratum: `VULN_CLASS_RE` over comments scores 2 gold hits but **0 new** (it
+    only re-finds commits other LFs already caught); a broad
+    race/UAF/unbounded/attacker vocabulary reaches the new row at 1.07% control
+    coverage (~423 corpus firings); this narrow named-class set reaches the same
+    row at **0.27%** (~105 corpus firings). Union with the `VULN_CLASS_RE`
+    variant adds 8 more firings and no gold, so it is left out.
+    """
+    added, _ = _hunks(x)          # empty for merges, so merges abstain
+    if not added:
+        return ABSTAIN
+    comments = "\n".join(l for l in added.split("\n")
+                         if COMMENT_LINE_RE.match(l))
+    return SECURITY if CONCURRENCY_COMMENT_RE.search(comments) else ABSTAIN
+
+
 # Grouped for the coverage report: (family, surface, mitigation, conjunction).
 DIFF_LF_FAMILIES = [
     ("SQL injection (CWE-89)", lf_diff_sql_query_touched,
@@ -1044,7 +1086,13 @@ DIFF_LF_FAMILIES = [
      lf_diff_dos_hardening_fix),
 ]
 
-DIFF_LFS = [lf for fam in DIFF_LF_FAMILIES for lf in fam[1:]]
+# Diff LFs that are not part of a surface/mitigation/conjunction triple.
+DIFF_STANDALONE_LFS = [
+    lf_diff_comment_names_concurrency_bug,
+]
+
+DIFF_LFS = ([lf for fam in DIFF_LF_FAMILIES for lf in fam[1:]]
+            + DIFF_STANDALONE_LFS)
 DIFF_SURFACE_LFS = [fam[1] for fam in DIFF_LF_FAMILIES]
 DIFF_MITIGATION_LFS = [fam[2] for fam in DIFF_LF_FAMILIES]
 DIFF_CONJUNCTION_LFS = [fam[3] for fam in DIFF_LF_FAMILIES]

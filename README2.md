@@ -15,11 +15,11 @@ Read `README.md` first for the pipeline. Read this for the current state.
 
 | | `README.md` as written | HEAD |
 | --- | --- | --- |
-| Labeling functions | 20 (message text only) | **41** = 21 content positives + 10 negatives + 2 derived + 18 diff |
+| Labeling functions | 20 (message text only) | **42** = 21 content positives + 10 negatives + 2 derived + 19 diff |
 | Signals available to an LF | `message`, `subject`, `files`, author, counts | + **patch text** (`diff_text`) + **cross-row features** (`release_window_positive`) |
 | Pipeline steps | 4 | 4 + 2 side steps (diff dump, diff sample) |
-| Gold recall (LabelModel) | 2 of 49 | **11 of 49** |
-| Gold recall (majority vote) | — | **33 of 49** (34 rows get a positive vote) |
+| Gold recall (LabelModel) | 2 of 49 | **12 of 49** |
+| Gold recall (majority vote) | — | **34 of 49** (37 rows get a positive vote) |
 
 `ALL_LFS` now holds **21**: the original 20 plus `lf_security_note_path`, which
 needs no diff and so belongs with the message/metadata set. `python -m
@@ -50,7 +50,8 @@ count of any positive LF in the set; the next best is `lf_vuln_class` at 3. See
 | `Coverage_Iteration2.md` | Same, with the 18 diff LFs added, plus ablations |
 | `Coverage_Iteration3.md` | 39 LFs, after `lf_security_note_path` landed |
 | `Coverage_Iteration4.md` | 40 LFs, after `lf_release_of_security_fix` landed |
-| `Coverage_Iteration5.md` | Current: 41 LFs, after `lf_patch_cites_fix_commit` landed |
+| `Coverage_Iteration5.md` | 41 LFs, after `lf_patch_cites_fix_commit` landed |
+| `Coverage_Iteration6.md` | Current: 42 LFs, after `lf_diff_comment_names_concurrency_bug` landed |
 
 ### New data artifacts (all under gitignored `data/`)
 
@@ -278,6 +279,33 @@ deliberately, not a free win.
 
 **Votes 22 → 29 → 34 → 36. Labels 11 → 11 → 11 → 11.**
 
+### Iteration 6 — 42 LFs, after `lf_diff_comment_names_concurrency_bug`
+
+Mechanism D reads a channel nothing else did: **added code comments**. Gold votes
+**36 → 37**, majority vote **33 → 34**, and the fitted model moved for the first
+time, **11 → 12**.
+
+It did not move for the reason it looks like. The row D was built for,
+`c67b59f891` (rfcomm race), sits at `prob_security` **0.24** and is still not
+labeled. The extra label is `9bb2878319`, which D gave a *second* positive vote,
+lifting it to 0.536. Which points at the finding that reframes everything above:
+
+| Co-firing positives | Rows | Labeled `security` | Gold rows | Gold labeled |
+| --- | --- | --- | --- | --- |
+| 0 | 2,722 | 0 | 12 | 0 |
+| 1 | 1,552 | **0** | 22 | **0** |
+| 2 | 619 | 338 | 9 | 7 |
+| 3+ | 558 | 518 | 6 | 5 |
+
+**One positive vote is worth exactly nothing** — 1,552 rows carry exactly one
+and not a single one is labeled. Two or more convert at about three in four.
+Every mechanism A–D adds *lone* votes to rows that had none, which is precisely
+why votes climbed 22 → 37 while labels went 11 → 12. There are only two ways
+out: make positives co-fire on the same row, or change the model configuration
+so a single vote can clear the threshold.
+
+**Votes 22 → 29 → 34 → 36 → 37. Labels 11 → 11 → 11 → 11 → 12.**
+
 ---
 
 ## Corrections to `README.md`
@@ -351,6 +379,14 @@ rediscover. Numbers are the measured impact.
    until they were changed to use `POSITIVE_LFS + DERIVED_LFS`. Grep for
    `POSITIVE_LFS` after adding any LF group.
 
+   **It bit twice.** `lf_diff_comment_names_concurrency_bug` is a diff LF that
+   belongs to no surface/mitigation/conjunction family, so `DIFF_LFS` had to
+   grow a `DIFF_STANDALONE_LFS` list — and the headline "gold rows with a
+   positive vote" counter, which summed `pos_msg_cols + mit_cols + conj_cols`,
+   silently omitted it and reported 36 instead of 37. There is now one
+   `all_pos_cols` that every such count uses. If you add an LF and a number
+   does not move, suspect the counter before the LF.
+
 8. **One gold fix is invisible to patch matching, permanently.**
    `6f363ec6f7` (Zephyr mcumgr) *moves* a NULL check ahead of
    `net_buf_reset()`. The added and removed line sets are identical, so no regex
@@ -367,7 +403,7 @@ rediscover. Numbers are the measured impact.
 .venv/bin/python gen_coverage_md.py                              # Coverage_Iteration1.md
 .venv/bin/python fetch_diff_sample.py --control 3000 --jobs 8    # diff_sample.parquet
 .venv/bin/python fetch_patch_citations.py --jobs 8               # patch_citations.parquet
-.venv/bin/python gen_coverage2_md.py --iteration 5               # Coverage_Iteration5.md
+.venv/bin/python gen_coverage2_md.py --iteration 6               # Coverage_Iteration6.md
 ```
 
 Runtimes on the 12-repo / 72,166-commit corpus: `gen_gold_md.py` 3s warm,

@@ -1,6 +1,6 @@
 # Progress — what it would take to reach 40 of 49
 
-> **Status:** mechanisms A, B and C are shipped and verified.
+> **Status:** mechanisms A, B, C and D are shipped and verified.
 > **A** (`lf_security_note_path`): gold votes 22 → 29, majority vote 22 → 29.
 > **B** (`lf_release_of_security_fix` + `commit_labels/features.py`): gold votes
 > **29 → 34**, majority vote 29 → 33. LabelModel conversion **unchanged at 11
@@ -99,7 +99,7 @@ which for a 0.068% base rate is the honest way to read precision.
 | **B′** | Same, restricted to high-confidence positives (`lf_cve_id`, `lf_ghsa_id`, `lf_advisory_language`, `lf_vuln_class`) | +4 of 15 | 162 of 1,442 | ~40 |
 | **C** ✅ | Added patch text cites a **positively-labeled commit SHA** (release changelogs link their fixes). **Shipped as `lf_patch_cites_fix_commit`, non-merges only.** | **+2** of 15 (verified) | 49 firings | ~25 |
 | **C2** ❌ | CVE/GHSA id in added changelog text. **Rejected.** The projected "+1 merge" survives only with merges included, and craftcms CHANGELOG lines propagate through every branch merge: 344 merge firings for that one row. Without merges: 18 firings, **0 gold**. A focus test on added-line count does not separate them — the smallest contaminated merges add one line containing a GHSA id. | +1 merge, or 0 | 362 with merges / 18 without | ~362 or ∞ |
-| **D** | `VULN_CLASS_RE` over **added comment lines only** | +1 new (2 gold total) | 8 of 3,000 control (0.27%) | ~190 |
+| **D** ✅ | Vuln class named in **added comment lines**. **Shipped as `lf_diff_comment_names_concurrency_bug`.** | **+1** (verified) | 8 of 3,000 control (0.27%), ~105 corpus | ~105 |
 | **E** | Concurrency / lifecycle family (speculative — not implemented) | +1 to +3 | unknown | unknown |
 
 **B and C are disjoint** — checked, not assumed. B recovers `34be9170f0`,
@@ -126,6 +126,17 @@ Notes that matter:
   It only works in repos that generate changelogs that way: mdex, tinacms,
   electron-builder. fzf's `0.73.1`, craftcms's `Finish 5.9.23` and seaweedfs's
   `4.30` cite nothing.
+- **D's estimate in this table was wrong when written, and the correction is
+  instructive.** The "+1 new" was real but came from a *broadened*
+  race/UAF/unbounded vocabulary, while the precision figure (0.27% control) came
+  from the *strict* `VULN_CLASS_RE` variant — two different detectors, one row
+  of the table. Re-measured: strict `VULN_CLASS_RE` over comments hits 2 gold
+  rows but **0 new** ones; the broad vocabulary reaches the new row at 1.07%
+  control (~423 corpus firings); a **narrow named-class set** (race condition,
+  data race, use-after-free, double-free, deadlock, TOCTOU) reaches the same row
+  at 0.27% (~105 firings). The narrow version shipped. Mixing a recall number
+  from one variant with a precision number from another is an easy mistake to
+  make and a hard one to notice.
 - **D is worth having for its own sake.** The rfcomm race fix
   (`c67b59f891`) is 17 added lines of which most are a comment explaining "the
   race condition where the disconnection process is triggered by both the local
