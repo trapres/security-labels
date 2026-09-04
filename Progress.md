@@ -1,9 +1,13 @@
 # Progress — what it would take to reach 40 of 49
 
-> **Status:** mechanism A shipped as `lf_security_note_path` and verified —
-> gold votes **22 → 29**, majority vote **22 → 29**, LabelModel conversion
-> unchanged at **11**. The rest of this document is unchanged from the analysis
-> that produced that plan; its baseline is 22 of 49.
+> **Status:** mechanisms A and B are shipped and verified.
+> **A** (`lf_security_note_path`): gold votes 22 → 29, majority vote 22 → 29.
+> **B** (`lf_release_of_security_fix` + `commit_labels/features.py`): gold votes
+> **29 → 34**, majority vote 29 → 33. LabelModel conversion **unchanged at 11
+> through both**, which is the prediction in "The second bottleneck" holding
+> three iterations running. Reports: `Coverage_Iteration3.md`,
+> `Coverage_Iteration4.md`. The rest of this document is the original analysis;
+> its baseline is 22 of 49.
 
 Iteration 2 gets a positive vote on **22 of 49** gold fixes and converts **11**
 into a `security` label. This is an analysis of the other 27: what they are, why
@@ -91,7 +95,7 @@ which for a 0.068% base rate is the honest way to read precision.
 | # | Mechanism | Gold gain | Measured cost | Firings per gold hit |
 | --- | --- | --- | --- | --- |
 | **A** ✅ | **Touches a `security/` or `advisories/` directory** — file list only, no diff needed. **Shipped as `lf_security_note_path`.** | **+7** (verified) | 546 of 72,166 (0.76%) | ~78 |
-| **B** | Release commit whose range since the previous release contains a positively-voted commit | **+5** of 15 | 252 of 1,442 release commits | ~50 |
+| **B** ✅ | Release commit whose range since the previous release contains a positively-voted commit. **Shipped as `lf_release_of_security_fix`.** | **+5** of 15 (verified) | 251 of 72,166 (0.35%) | ~50 |
 | **B′** | Same, restricted to high-confidence positives (`lf_cve_id`, `lf_ghsa_id`, `lf_advisory_language`, `lf_vuln_class`) | +4 of 15 | 162 of 1,442 | ~40 |
 | **C** | Added patch text cites a **positively-labeled commit SHA** (release changelogs link their fixes) | **+2** of 15, **+1** merge | ~38 corpus firings | ~13 |
 | **D** | `VULN_CLASS_RE` over **added comment lines only** | +1 new (2 gold total) | 8 of 3,000 control (0.27%) | ~190 |
@@ -233,7 +237,8 @@ If you want one number to move, it is **22 → 11**, not **22 → 40**.
    the 0.5 threshold. Mechanism A validated the prediction in "The second
    bottleneck" exactly.
 2. **Fix the model conversion.** Dependency structure or learned class balance.
-   Doubles the value of every LF already written.
+   Doubles the value of every LF already written. **Now the only thing that
+   matters:** A and B together added 12 votes and 0 labels.
 3. **Re-attribute the release-commit gold labels** (recommendation 1). Turns 15
    dead rows into live ones and removes the artifact documented in `README2.md`.
 4. **`lf_diff_comment_vuln_class`** (mechanism D). Cheap, 0.27% control

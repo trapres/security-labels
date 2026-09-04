@@ -21,7 +21,8 @@ import pandas as pd
 from snorkel.labeling import LFAnalysis, PandasLFApplier
 from snorkel.labeling.model import LabelModel, MajorityLabelVoter
 
-from commit_labels.lfs import (ABSTAIN, ALL_LFS, ALL_LFS_WITH_DIFF,
+from commit_labels import features
+from commit_labels.lfs import (ABSTAIN, ALL_LFS, ALL_LFS_WITH_DIFF, DERIVED_LFS,
                                DIFF_CONJUNCTION_LFS, DIFF_LF_FAMILIES,
                                DIFF_LFS, DIFF_MITIGATION_LFS,
                                DIFF_SURFACE_LFS, NEGATIVE_LFS, NOT_SEC,
@@ -61,6 +62,17 @@ CHANGES_SINCE = {
        "found the positive side recovering 2 of 49 gold fixes. This iteration "
        "adds **18 diff LFs** — six vulnerability classes × (surface touched, "
        "mitigation added, both).",
+    4: "Since iteration 3: **`lf_release_of_security_fix`** landed (mechanism B "
+       "in `Progress.md`), backed by the new `commit_labels/features.py`. It is "
+       "the first LF that cannot be computed from its own row: a release commit "
+       "is marked positive when any commit in its range since the previous "
+       "release carries a positive vote. Measured on the full corpus at 251 "
+       "firings (0.35%) for **5 gold hits**, 4 of which change no code at all "
+       "and were unreachable by any content signal. Gold fixes with a positive "
+       "vote went **29 → 34**; majority vote **29 → 33** (the shortfall is "
+       "`b636a220d8`, where this LF and `lf_bot_author` tie 1-1 and majority "
+       "vote abstains); LabelModel conversion **still 11**, now for the third "
+       "iteration running.",
     3: "Since iteration 2: **`lf_security_note_path`** landed (mechanism A in "
        "`Progress.md`) — a commit that changes code *and* a file under a "
        "`security/` or `advisories/` directory. Measured on the full corpus at "
@@ -91,6 +103,11 @@ def pct(x: float) -> str:
 
 # ------------------------------------------------------------------- load
 full = pd.read_parquet(ROOT / "data" / "interim" / "commits.parquet")
+# Mechanism B's feature must be computed over the whole corpus - a sampled
+# release commit's window is mostly unsampled commits - so annotate here and
+# let the merge carry the column onto the sample. Costs one extra pass of the
+# positive LFs over 72k rows (~20s).
+full = features.add_release_window_feature(full)
 sample = pd.read_parquet(ROOT / "data" / "interim" / "diff_sample.parquet")
 sample = sample.rename(columns={"diff": "diff_text"})[["sha", "stratum", "diff_text"]]
 
@@ -128,7 +145,8 @@ L = PandasLFApplier(lfs=ALL_LFS_WITH_DIFF).apply(df=df, progress_bar=False)
 col = {n: j for j, n in enumerate(names)}
 msg_cols = [col[lf.name] for lf in ALL_LFS]
 diff_cols = [col[lf.name] for lf in DIFF_LFS]
-pos_msg_cols = [col[lf.name] for lf in POSITIVE_LFS]
+# POSITIVE_LFS plus DERIVED_LFS: both vote SECURITY off non-diff signals.
+pos_msg_cols = [col[lf.name] for lf in POSITIVE_LFS + DERIVED_LFS]
 neg_msg_cols = [col[lf.name] for lf in NEGATIVE_LFS]
 mit_cols = [col[lf.name] for lf in DIFF_MITIGATION_LFS]
 conj_cols = [col[lf.name] for lf in DIFF_CONJUNCTION_LFS]

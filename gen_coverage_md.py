@@ -23,8 +23,13 @@ import pandas as pd
 from snorkel.labeling import LFAnalysis, PandasLFApplier
 from snorkel.labeling.model import LabelModel, MajorityLabelVoter
 
-from commit_labels.lfs import (ABSTAIN, ALL_LFS, NEGATIVE_LFS, NOT_SEC,
-                               POSITIVE_LFS, SECURITY)
+from commit_labels import features
+from commit_labels.lfs import (ABSTAIN, ALL_LFS, DERIVED_LFS, NEGATIVE_LFS,
+                               NOT_SEC, POSITIVE_LFS, SECURITY)
+
+# Derived LFs vote SECURITY too, so every "is this a positive LF" question here
+# has to include them or their votes get scored with the wrong polarity.
+POS_ALL = POSITIVE_LFS + DERIVED_LFS
 
 ROOT = Path(__file__).resolve().parent
 DIFF_CACHE = ROOT / "data" / "interim" / "gold_diffs"
@@ -51,6 +56,9 @@ p.add_argument("--seed", type=int, default=42)
 args = p.parse_args()
 
 df = pd.read_parquet(args.commits)
+# lf_release_of_security_fix reads a precomputed column; without this it
+# abstains on every row and looks like a dead LF.
+df = features.add_release_window_feature(df)
 gold = df["is_cve_fix"].astype(int).to_numpy()
 
 t0 = time.time()
@@ -58,7 +66,7 @@ L = PandasLFApplier(lfs=ALL_LFS).apply(df=df, progress_bar=False)
 apply_secs = time.time() - t0
 
 names = [lf.name for lf in ALL_LFS]
-pos_names = {lf.name for lf in POSITIVE_LFS}
+pos_names = {lf.name for lf in POS_ALL}
 n, m = L.shape
 
 # ------------------------------------------------------------------ per-LF math
@@ -147,7 +155,7 @@ lm_flagged = int((preds == SECURITY).sum())
 mv_tp = int((mv_preds[gold_idx] == SECURITY).sum())
 
 # ------------------------------------------------------------------ gold detail
-pos_cols = [names.index(lf.name) for lf in POSITIVE_LFS]
+pos_cols = [names.index(lf.name) for lf in POS_ALL]
 neg_cols = [names.index(lf.name) for lf in NEGATIVE_LFS]
 gold_pos_votes = (L[np.ix_(gold_idx, pos_cols)] == SECURITY).sum(axis=1)
 gold_neg_votes = (L[np.ix_(gold_idx, neg_cols)] == NOT_SEC).sum(axis=1)
@@ -169,7 +177,8 @@ w("Baseline measurement of the LFs shipped in `commit_labels/lfs.py`, before any
   "`commits_labeled.parquet`, so `lfs.py` is the only source of truth.")
 w("")
 w(f"- **{n:,} commits**, {df.repo.nunique()} repos, **{m} LFs** "
-  f"({len(POSITIVE_LFS)} positive / {len(NEGATIVE_LFS)} negative)")
+  f"({len(POSITIVE_LFS)} positive / {len(NEGATIVE_LFS)} negative / "
+  f"{len(DERIVED_LFS)} derived-from-a-precomputed-feature)")
 w(f"- Gold: **{len(gold_idx)}** advisory-confirmed fixes "
   f"({100 * len(gold_idx) / n:.3f}% of the corpus)")
 if release_only:

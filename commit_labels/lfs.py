@@ -1050,6 +1050,35 @@ DIFF_MITIGATION_LFS = [fam[2] for fam in DIFF_LF_FAMILIES]
 DIFF_CONJUNCTION_LFS = [fam[3] for fam in DIFF_LF_FAMILIES]
 
 
+# --------------------------------------------------------------------------
+# Derived LFs - these read a precomputed column, not the commit itself
+# --------------------------------------------------------------------------
+
+@labeling_function()
+def lf_release_of_security_fix(x):
+    """A release commit whose range since the previous release ships a fix.
+
+    Reads the ``release_window_positive`` column from ``features.py``; a
+    per-row LF cannot compute it, because the evidence lives in *other*
+    commits. **Abstains everywhere if that column is absent**, so a caller that
+    forgets ``features.add_release_window_feature(df)`` silently loses this LF
+    rather than crashing - check its coverage in the report if it looks dead.
+
+    Why it exists: 15 of the 49 gold rows are release commits, 10 of which
+    change no code at all, so no amount of content vocabulary can reach them.
+    Measured on the full corpus: 251 firings for 5 gold hits, all 5 previously
+    missed.
+
+    Judgment call worth knowing about: this votes SECURITY on commits that
+    ``lf_version_bump`` and ``lf_feature_commit`` vote NOT_SEC on with learned
+    accuracy 1.00, and it is semantically arguable - a release *ships* a fix, it
+    is not itself the fix. It is here because the gold labels point at releases.
+    `Progress.md` recommends re-attributing those labels instead, which would
+    make this LF unnecessary.
+    """
+    return SECURITY if _field_bool(x, "release_window_positive") else ABSTAIN
+
+
 POSITIVE_LFS = [
     lf_cve_id,
     lf_ghsa_id,
@@ -1077,7 +1106,14 @@ NEGATIVE_LFS = [
     lf_empty_message,
 ]
 
-ALL_LFS = POSITIVE_LFS + NEGATIVE_LFS
+# Derived LFs are kept out of POSITIVE_LFS on purpose: features.py seeds the
+# release-window feature from POSITIVE_LFS, and including a derived LF in that
+# seed would feed the feature its own output.
+DERIVED_LFS = [
+    lf_release_of_security_fix,
+]
+
+ALL_LFS = POSITIVE_LFS + NEGATIVE_LFS + DERIVED_LFS
 
 # Message LFs plus the diff LFs. Kept separate from ALL_LFS so that
 # `python -m commit_labels.label` on the full corpus - where no diff column

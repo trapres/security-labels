@@ -27,6 +27,7 @@ from snorkel.labeling import LFAnalysis, PandasLFApplier
 from snorkel.labeling.model import LabelModel, MajorityLabelVoter
 
 from . import config
+from .features import add_release_window_feature
 from .lfs import ABSTAIN, ALL_LFS, NOT_SEC, SECURITY
 
 log = logging.getLogger("label")
@@ -74,6 +75,15 @@ def main(argv=None) -> int:
 
     df = load_commits(args.commits)
     log.info("Loaded %d commits from %d repos", len(df), df["repo"].nunique())
+
+    # Precompute the cross-row feature lf_release_of_security_fix depends on.
+    # Must happen before any --sample downsampling: a release commit's window is
+    # its neighbours, and sampling deletes them.
+    df = add_release_window_feature(df)
+    log.info(
+        "release_window_positive set on %d commits",
+        int(df["release_window_positive"].sum()),
+    )
 
     if args.sample and args.sample < len(df):
         df = df.sample(args.sample, random_state=args.seed).reset_index(drop=True)

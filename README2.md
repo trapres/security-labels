@@ -15,11 +15,11 @@ Read `README.md` first for the pipeline. Read this for the current state.
 
 | | `README.md` as written | HEAD |
 | --- | --- | --- |
-| Labeling functions | 20 (message text only) | **39** = 21 message/metadata + 18 diff |
-| Signals available to an LF | `message`, `subject`, `files`, author, counts | + **patch text** (`diff_text`) |
+| Labeling functions | 20 (message text only) | **40** = 21 content positives + 10 negatives + 1 derived + 18 diff |
+| Signals available to an LF | `message`, `subject`, `files`, author, counts | + **patch text** (`diff_text`) + **cross-row features** (`release_window_positive`) |
 | Pipeline steps | 4 | 4 + 2 side steps (diff dump, diff sample) |
 | Gold recall (LabelModel) | 2 of 49 | **11 of 49** |
-| Gold recall (majority vote) | — | **29 of 49** |
+| Gold recall (majority vote) | — | **33 of 49** (34 rows get a positive vote) |
 
 `ALL_LFS` now holds **21**: the original 20 plus `lf_security_note_path`, which
 needs no diff and so belongs with the message/metadata set. `python -m
@@ -40,13 +40,15 @@ count of any positive LF in the set; the next best is `lf_vuln_class` at 3. See
 | File | What it is |
 | --- | --- |
 | `gen_gold_md.py` | Dumps the gold set + CVE disclosures + diffs → `docs/cve-fix-commits.md` |
+| `commit_labels/features.py` | Dataframe-level features a per-row LF can't compute — currently `release_window_positive` |
 | `fetch_diff_sample.py` | Builds the stratified diff sample → `data/interim/diff_sample.parquet` |
 | `gen_coverage_md.py` | Iteration-1 coverage report (20 message LFs, full corpus) |
 | `gen_coverage2_md.py` | Diff-aware coverage report (all of `ALL_LFS_WITH_DIFF`, diff sample) |
 | `docs/cve-fix-commits.md` | 49 gold commits: raw `message`, `git show` diff, NVD/GHSA/OSV links |
 | `Coverage_Iteration1.md` | Baseline measurement of the shipped LFs |
 | `Coverage_Iteration2.md` | Same, with the 18 diff LFs added, plus ablations |
-| `Coverage_Iteration3.md` | Current: 39 LFs, after `lf_security_note_path` landed |
+| `Coverage_Iteration3.md` | 39 LFs, after `lf_security_note_path` landed |
+| `Coverage_Iteration4.md` | Current: 40 LFs, after `lf_release_of_security_fix` landed |
 
 ### New data artifacts (all under gitignored `data/`)
 
@@ -221,6 +223,32 @@ positive — so its single vote yields `prob_security` ≈ 0.27.
 Full report: `Coverage_Iteration3.md`, generated with
 `gen_coverage2_md.py --iteration 3`.
 
+### Iteration 4 — 40 LFs, after `lf_release_of_security_fix` (same 5,451 commits)
+
+| LF set | LFs | Gold | Majority vote | Flagged | Flagged in control |
+| --- | --- | --- | --- | --- | --- |
+| message/metadata only | 22 | 1 of 49 | 20 of 49 | 327 | 0 |
+| message + 6 mitigation | 28 | 7 of 49 | 33 of 49 | 696 | 34 |
+| message + mitigation + conjunction | 34 | 11 of 49 | 33 of 49 | 837 | 87 |
+| all 40 (adds surface vetoes) | 40 | **11 of 49** | **33 of 49** | 837 | 87 |
+| diff LFs only | 18 | 11 of 49 | 18 of 49 | 430 | 95 |
+
+Mechanism B (`Progress.md`) took gold votes from 29 to **34** — the five rows
+are `c6cf5a5bd7`, `34be9170f0` (seaweedfs `4.34`/`4.30`), `684c9e8f32`
+(`release: Zephyr 4.4.0`, whose entire diff is `EXTRAVERSION = rc3` → empty),
+`a8eda73630` (`Finish 4.17.14`) and `b636a220d8` (tinacms `Version Packages`).
+Four of them change no code whatsoever, so no content-based LF could ever have
+reached them.
+
+Majority vote reached 33, not 34: on `b636a220d8` the new LF and
+`lf_bot_author` tie 1-1 and majority vote abstains. The conflict I expected with
+`lf_version_bump` mostly did not materialise — `VERSION_BUMP_RE` needs
+whitespace after the verb, so it misses `release: Zephyr 4.4.0`, `4.30` and
+`Finish 4.17.14` entirely.
+
+**Three iterations, three times the fitted model converted 11.** Votes went
+22 → 29 → 34 while labels stayed flat. Full report: `Coverage_Iteration4.md`.
+
 ---
 
 ## Corrections to `README.md`
@@ -277,7 +305,16 @@ rediscover. Numbers are the measured impact.
    narrowing the surfaces and adding the three withholding conditions, vetoes
    are **2 of 49**.
 
-6. **One gold fix is invisible to patch matching, permanently.**
+6. **A new LF *category* means auditing every "is this positive?" test.**
+   `lf_release_of_security_fix` lives in `DERIVED_LFS`, not `POSITIVE_LFS`,
+   because `features.py` seeds its feature from `POSITIVE_LFS` and including it
+   there would feed the feature its own output. Both report scripts computed
+   polarity as "in `POSITIVE_LFS` → SECURITY, else NOT_SEC", so the new LF was
+   silently scored with the wrong polarity — its gold hits counted as zero —
+   until they were changed to use `POSITIVE_LFS + DERIVED_LFS`. Grep for
+   `POSITIVE_LFS` after adding any LF group.
+
+7. **One gold fix is invisible to patch matching, permanently.**
    `6f363ec6f7` (Zephyr mcumgr) *moves* a NULL check ahead of
    `net_buf_reset()`. The added and removed line sets are identical, so no regex
    over hunk text can tell the order changed. Not a bug to fix — a limit to
@@ -292,7 +329,7 @@ rediscover. Numbers are the measured impact.
 .venv/bin/python gen_gold_md.py                                  # gold diffs + docs/cve-fix-commits.md
 .venv/bin/python gen_coverage_md.py                              # Coverage_Iteration1.md
 .venv/bin/python fetch_diff_sample.py --control 3000 --jobs 8    # diff_sample.parquet
-.venv/bin/python gen_coverage2_md.py --iteration 3               # Coverage_Iteration3.md
+.venv/bin/python gen_coverage2_md.py --iteration 4               # Coverage_Iteration4.md
 ```
 
 Runtimes on the 12-repo / 72,166-commit corpus: `gen_gold_md.py` 3s warm,
@@ -320,6 +357,12 @@ Write to `--out` while iterating so the committed baselines stay put, then
 regenerate in place when you are happy. Measured breakdown of the 25s: 21s is
 applying the 38 LFs to 5,451 rows, 3s is five LabelModel fits, and 1s is
 everything else. Model fitting is *not* the cost — regex over patch text is.
+
+One dependency to know about: `release_window_positive` is seeded by
+`POSITIVE_LFS`, so **editing any positive LF changes that feature too**. Both
+report scripts and `label.py` call `features.add_release_window_feature()`
+themselves, so this is automatic — it just costs an extra pass of the positive
+LFs over 72k rows (~20s). Nothing to remember, but it explains the runtime.
 
 Two edits do require re-running `fetch_diff_sample.py` (≈6 min):
 
