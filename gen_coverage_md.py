@@ -58,7 +58,7 @@ args = p.parse_args()
 df = pd.read_parquet(args.commits)
 # lf_release_of_security_fix reads a precomputed column; without this it
 # abstains on every row and looks like a dead LF.
-df = features.add_release_window_feature(df)
+df = features.add_all_features(df)
 gold = df["is_cve_fix"].astype(int).to_numpy()
 
 t0 = time.time()

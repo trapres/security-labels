@@ -15,7 +15,7 @@ Read `README.md` first for the pipeline. Read this for the current state.
 
 | | `README.md` as written | HEAD |
 | --- | --- | --- |
-| Labeling functions | 20 (message text only) | **40** = 21 content positives + 10 negatives + 1 derived + 18 diff |
+| Labeling functions | 20 (message text only) | **41** = 21 content positives + 10 negatives + 2 derived + 18 diff |
 | Signals available to an LF | `message`, `subject`, `files`, author, counts | + **patch text** (`diff_text`) + **cross-row features** (`release_window_positive`) |
 | Pipeline steps | 4 | 4 + 2 side steps (diff dump, diff sample) |
 | Gold recall (LabelModel) | 2 of 49 | **11 of 49** |
@@ -40,7 +40,8 @@ count of any positive LF in the set; the next best is `lf_vuln_class` at 3. See
 | File | What it is |
 | --- | --- |
 | `gen_gold_md.py` | Dumps the gold set + CVE disclosures + diffs → `docs/cve-fix-commits.md` |
-| `commit_labels/features.py` | Dataframe-level features a per-row LF can't compute — currently `release_window_positive` |
+| `commit_labels/features.py` | Dataframe-level features a per-row LF can't compute: `release_window_positive`, changelog citations |
+| `fetch_patch_citations.py` | Changelog-only `git show` over release/merge commits → `data/interim/patch_citations.parquet` |
 | `fetch_diff_sample.py` | Builds the stratified diff sample → `data/interim/diff_sample.parquet` |
 | `gen_coverage_md.py` | Iteration-1 coverage report (20 message LFs, full corpus) |
 | `gen_coverage2_md.py` | Diff-aware coverage report (all of `ALL_LFS_WITH_DIFF`, diff sample) |
@@ -48,7 +49,8 @@ count of any positive LF in the set; the next best is `lf_vuln_class` at 3. See
 | `Coverage_Iteration1.md` | Baseline measurement of the shipped LFs |
 | `Coverage_Iteration2.md` | Same, with the 18 diff LFs added, plus ablations |
 | `Coverage_Iteration3.md` | 39 LFs, after `lf_security_note_path` landed |
-| `Coverage_Iteration4.md` | Current: 40 LFs, after `lf_release_of_security_fix` landed |
+| `Coverage_Iteration4.md` | 40 LFs, after `lf_release_of_security_fix` landed |
+| `Coverage_Iteration5.md` | Current: 41 LFs, after `lf_patch_cites_fix_commit` landed |
 
 ### New data artifacts (all under gitignored `data/`)
 
@@ -56,6 +58,7 @@ count of any positive LF in the set; the next best is `lf_vuln_class` at 3. See
 | --- | --- | --- |
 | `data/interim/gold_diffs/` | 15 MB | `<sha>.patch` + `<sha>.stat` for all 49 gold commits, uncapped |
 | `data/interim/diff_sample.parquet` | 27 MB | 5,451 rows × (`sha`, `repo`, `stratum`, `diff`), 85 MB of filtered patch text |
+| `data/interim/patch_citations.parquet` | <1 MB | 7,128 release/merge commits × (`patch_cites_advisory`, `patch_cites_fix_commit`) |
 
 ---
 
@@ -249,6 +252,32 @@ whitespace after the verb, so it misses `release: Zephyr 4.4.0`, `4.30` and
 **Three iterations, three times the fitted model converted 11.** Votes went
 22 → 29 → 34 while labels stayed flat. Full report: `Coverage_Iteration4.md`.
 
+### Iteration 5 — 41 LFs, after `lf_patch_cites_fix_commit` (same 5,451 commits)
+
+| LF set | LFs | Gold | Majority vote | Flagged | Flagged in control |
+| --- | --- | --- | --- | --- | --- |
+| message/metadata only | 23 | 1 of 49 | 20 of 49 | 331 | 0 |
+| message + 6 mitigation | 29 | 7 of 49 | 33 of 49 | 699 | 34 |
+| message + mitigation + conjunction | 35 | 11 of 49 | 33 of 49 | 840 | 87 |
+| all 41 (adds surface vetoes) | 41 | **11 of 49** | **33 of 49** | 840 | 87 |
+| diff LFs only | 18 | 11 of 49 | 18 of 49 | 430 | 95 |
+
+Mechanism C took gold votes to **36** (`c05684d9e7` mdex, `b6f613b1e3`
+tinacms), and **half of it was rejected on measurement** — see the `C2` row in
+`Progress.md`.
+
+Majority vote did not move, and the reason is new: **three gold rows now carry a
+lone positive vote against one or two negatives** — `c05684d9e7` (1 vs
+`lf_version_bump` + `lf_feature_commit`), `b636a220d8` and `b6f613b1e3` (1 vs
+`lf_bot_author`). All three are release commits, which is exactly where
+mechanisms B and C operate, so the derived LFs and the release-shaped negatives
+are now fighting over the same rows. Withholding those three negatives when a
+derived release feature fires would take majority vote from 33 to 36 — and
+weaken three LFs whose learned accuracy is 1.00. That is a trade to decide
+deliberately, not a free win.
+
+**Votes 22 → 29 → 34 → 36. Labels 11 → 11 → 11 → 11.**
+
 ---
 
 ## Corrections to `README.md`
@@ -305,7 +334,15 @@ rediscover. Numbers are the measured impact.
    narrowing the surfaces and adding the three withholding conditions, vetoes
    are **2 of 49**.
 
-6. **A new LF *category* means auditing every "is this positive?" test.**
+6. **Changelog text propagates through merges.** A first-parent diff of
+   `Merge branch '5.x' into bugfix/...` re-adds every changelog line the side
+   branch introduced, including old advisory entries, as if this commit wrote
+   them. That is why the CVE/GHSA-in-changelog detector scored 344 merge
+   firings in craftcms alone for one real row, and why
+   `lf_patch_cites_fix_commit` excludes merges. Trap #4 was the same mechanism
+   seen from the code side; this is its documentation-side twin.
+
+7. **A new LF *category* means auditing every "is this positive?" test.**
    `lf_release_of_security_fix` lives in `DERIVED_LFS`, not `POSITIVE_LFS`,
    because `features.py` seeds its feature from `POSITIVE_LFS` and including it
    there would feed the feature its own output. Both report scripts computed
@@ -314,7 +351,7 @@ rediscover. Numbers are the measured impact.
    until they were changed to use `POSITIVE_LFS + DERIVED_LFS`. Grep for
    `POSITIVE_LFS` after adding any LF group.
 
-7. **One gold fix is invisible to patch matching, permanently.**
+8. **One gold fix is invisible to patch matching, permanently.**
    `6f363ec6f7` (Zephyr mcumgr) *moves* a NULL check ahead of
    `net_buf_reset()`. The added and removed line sets are identical, so no regex
    over hunk text can tell the order changed. Not a bug to fix — a limit to
@@ -329,7 +366,8 @@ rediscover. Numbers are the measured impact.
 .venv/bin/python gen_gold_md.py                                  # gold diffs + docs/cve-fix-commits.md
 .venv/bin/python gen_coverage_md.py                              # Coverage_Iteration1.md
 .venv/bin/python fetch_diff_sample.py --control 3000 --jobs 8    # diff_sample.parquet
-.venv/bin/python gen_coverage2_md.py --iteration 4               # Coverage_Iteration4.md
+.venv/bin/python fetch_patch_citations.py --jobs 8               # patch_citations.parquet
+.venv/bin/python gen_coverage2_md.py --iteration 5               # Coverage_Iteration5.md
 ```
 
 Runtimes on the 12-repo / 72,166-commit corpus: `gen_gold_md.py` 3s warm,

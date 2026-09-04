@@ -2,7 +2,8 @@
 
 Snorkel hands an LF one row at a time, so any signal that depends on *other*
 commits has to be precomputed into a column first. That is what this module is
-for, and right now it holds exactly one such feature.
+for. Two features live here today, both from ``Progress.md``: mechanism B's
+``release_window_positive`` and mechanism C's changelog-citation columns.
 
 ``release_window_positive`` — mechanism B in ``Progress.md``. An advisory often
 names the *release* that shipped a fix rather than the fix itself: 15 of the 49
@@ -25,6 +26,7 @@ Two properties worth stating plainly:
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -42,6 +44,11 @@ RELEASE_SUBJECT_RE = re.compile(
 )
 
 FEATURE_COL = "release_window_positive"
+CITATION_COLS = ("patch_cites_advisory", "patch_cites_fix_commit")
+CITATIONS_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "interim"
+    / "patch_citations.parquet"
+)
 
 
 def is_release_subject(subject: str | None) -> bool:
@@ -109,3 +116,30 @@ def add_release_window_feature(
     out = df.copy()
     out[FEATURE_COL] = release_windows(df, seed_positive)
     return out
+
+
+def add_patch_citation_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Merge the changelog-citation columns from fetch_patch_citations.py.
+
+    Mechanism C. Only release-ish and merge commits are in that file, so every
+    other row gets False. If the file is missing, all rows get False and
+    ``lf_patch_cites_fix_commit`` abstains everywhere - run
+    ``fetch_patch_citations.py`` to populate it.
+    """
+    out = df.copy()
+    if not CITATIONS_PATH.exists():
+        for c in CITATION_COLS:
+            out[c] = False
+        return out
+    cites = pd.read_parquet(CITATIONS_PATH)
+    out = out.merge(cites, on="sha", how="left")
+    for c in CITATION_COLS:
+        # .eq(True) rather than .fillna(False).astype(bool): the merge leaves
+        # object-dtype NaNs, and fillna on those is a pandas FutureWarning.
+        out[c] = out[c].eq(True)
+    return out
+
+
+def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Every precomputed feature the derived LFs need. Call on the full corpus."""
+    return add_patch_citation_features(add_release_window_feature(df))

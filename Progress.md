@@ -1,6 +1,6 @@
 # Progress — what it would take to reach 40 of 49
 
-> **Status:** mechanisms A and B are shipped and verified.
+> **Status:** mechanisms A, B and C are shipped and verified.
 > **A** (`lf_security_note_path`): gold votes 22 → 29, majority vote 22 → 29.
 > **B** (`lf_release_of_security_fix` + `commit_labels/features.py`): gold votes
 > **29 → 34**, majority vote 29 → 33. LabelModel conversion **unchanged at 11
@@ -97,14 +97,15 @@ which for a 0.068% base rate is the honest way to read precision.
 | **A** ✅ | **Touches a `security/` or `advisories/` directory** — file list only, no diff needed. **Shipped as `lf_security_note_path`.** | **+7** (verified) | 546 of 72,166 (0.76%) | ~78 |
 | **B** ✅ | Release commit whose range since the previous release contains a positively-voted commit. **Shipped as `lf_release_of_security_fix`.** | **+5** of 15 (verified) | 251 of 72,166 (0.35%) | ~50 |
 | **B′** | Same, restricted to high-confidence positives (`lf_cve_id`, `lf_ghsa_id`, `lf_advisory_language`, `lf_vuln_class`) | +4 of 15 | 162 of 1,442 | ~40 |
-| **C** | Added patch text cites a **positively-labeled commit SHA** (release changelogs link their fixes) | **+2** of 15, **+1** merge | ~38 corpus firings | ~13 |
+| **C** ✅ | Added patch text cites a **positively-labeled commit SHA** (release changelogs link their fixes). **Shipped as `lf_patch_cites_fix_commit`, non-merges only.** | **+2** of 15 (verified) | 49 firings | ~25 |
+| **C2** ❌ | CVE/GHSA id in added changelog text. **Rejected.** The projected "+1 merge" survives only with merges included, and craftcms CHANGELOG lines propagate through every branch merge: 344 merge firings for that one row. Without merges: 18 firings, **0 gold**. A focus test on added-line count does not separate them — the smallest contaminated merges add one line containing a GHSA id. | +1 merge, or 0 | 362 with merges / 18 without | ~362 or ∞ |
 | **D** | `VULN_CLASS_RE` over **added comment lines only** | +1 new (2 gold total) | 8 of 3,000 control (0.27%) | ~190 |
 | **E** | Concurrency / lifecycle family (speculative — not implemented) | +1 to +3 | unknown | unknown |
 
 **B and C are disjoint** — checked, not assumed. B recovers `34be9170f0`,
 `684c9e8f32`, `a8eda73630`, `b636a220d8`, `c6cf5a5bd7`; C recovers
 `b6f613b1e3`, `c05684d9e7`. Together they take **7 of the 15** release rows,
-leaving 8.
+leaving 8. Both shipped; verified at +5 and +2 respectively.
 
 Notes that matter:
 

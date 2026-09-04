@@ -1079,6 +1079,37 @@ def lf_release_of_security_fix(x):
     return SECURITY if _field_bool(x, "release_window_positive") else ABSTAIN
 
 
+@labeling_function()
+def lf_patch_cites_fix_commit(x):
+    """A release commit whose changelog links a commit some LF voted positive.
+
+    Mechanism C. `release-please` and `changesets` write entries like
+    ``* **delta:** omit dangerous URL by default ([2817147](.../commit/...))``,
+    so the release commit names the fix it ships even though its own subject is
+    ``chore(main): release 0.13.2``. Reads ``patch_cites_fix_commit`` from
+    ``fetch_patch_citations.py``; seeded by POSITIVE_LFS votes, never by
+    DERIVED_LFS, so there is no feedback loop.
+
+    **Merges are excluded, and that is the whole story of this LF.** In
+    craftcms, CHANGELOG lines propagate through every branch merge, so a
+    first-parent diff of ``Merge branch '5.x' into bugfix/...`` re-adds old
+    advisory entries as if they were new. Measured: 46 of 95 raw firings are
+    merges. Restricted to non-merges it is 49 firings for 2 gold hits, one of
+    the most precise positives in the set.
+
+    The sibling detector ``patch_cites_advisory`` (a CVE/GHSA id in added
+    changelog text) is computed and stored but **deliberately not registered as
+    an LF**: excluding merges leaves 18 firings and zero gold hits, and
+    including them buys exactly one gold row (``2c2579c7f1``) for 344 merge
+    firings in a single repo. A focus test on added-line count does not
+    separate them - the smallest contaminated merges add one line containing a
+    GHSA id.
+    """
+    if _field_bool(x, "is_merge"):
+        return ABSTAIN
+    return SECURITY if _field_bool(x, "patch_cites_fix_commit") else ABSTAIN
+
+
 POSITIVE_LFS = [
     lf_cve_id,
     lf_ghsa_id,
@@ -1111,6 +1142,7 @@ NEGATIVE_LFS = [
 # seed would feed the feature its own output.
 DERIVED_LFS = [
     lf_release_of_security_fix,
+    lf_patch_cites_fix_commit,
 ]
 
 ALL_LFS = POSITIVE_LFS + NEGATIVE_LFS + DERIVED_LFS
