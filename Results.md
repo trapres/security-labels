@@ -33,11 +33,39 @@ code they create and adjust as necessary!
 
 ## How it Works
 
+One of the wonderful thing about Weak Supervision is that it starts very simply. 
+You (or an AI) can guess what heuristics (likely very simple functions) yet grow
+increasingly complex labelling functions. You can start with a regex (`re.search(...)`) and grow to your own classifier, or whatever else you like. 
+
+These labelling functions (LFs) are the backbone of labelling, but the actual 
+labelling process can vary quite a bit. For example:
+
+Simply majority vote -- we label X based on the aggregate votes of the LF's is
+a simple strategy that treats all LF's as equals (which they tend *not* to be), 
+no matter how complicated they are. 
+
+The LF's inputs create a Labelling Model (LM), which can then be used on
+data not trained against (to see how roobust the model is).
+
+
+
 ## Coverage Quality
+
+Each iteration of LF's increased our ability to find CVE related commits. 
+
+
 
 ## Result
 
 ## Next Steps
 
+
+
 ## Resources
+
+* Snorkel
+
+* Weak Supervision
+ 
+* 
 
