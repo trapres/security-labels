@@ -78,40 +78,31 @@ The remaining LF's looked at release notes and comments therein, taking coverage
 | **C** (iter 5) | `lf_patch_cites_fix_commit` — changelog links the SHA of an already-labeled fix | 41 | 49 firings, ~25 per hit | **+2 → 36** | 33 | 11 |
 | **D** (iter 6) | `lf_diff_comment_names_concurrency_bug` — added *code comment* names a race / UAF / deadlock / TOCTOU | 42 | ~105 (0.27%) | **+1 → 37** | 34 | **12** |
 
-
 Coverage more than quadrupled (9 → 37) while
 LabelModel conversion crawled from 2 to 12, and it sat pinned at 11 for four
 consecutive iterations — A and B together added twelve gold votes and *zero*
 labels. The cause is structural, not a shortage of LFs: every positive LF learns
 an accuracy near 0.27 against a 0.068% base rate, so a single positive vote
 yields `prob_security` ≈ 0.27 and loses to the 0.5 threshold no matter how good
-that vote is. Iteration 6 proves the point in miniature — the LabelModel finally
-moved to 12, but *not* on the race-condition commit the LF was written for; the
-extra label was a commit that happened to collect a **second** positive vote,
-pushing it to 0.536. Two other results are worth carrying forward. First,
-several plausible ideas were killed by measurement rather than shipped on
-intuition: a CVE-id-in-changelog detector (C2) scored 0 gold for 18 firings
-without merges and 344 merge firings for a single row with them, and adding
-crypto, SSRF, deserialization or CSRF families would have returned exactly zero
-on this gold set. Second, 9 of the 49 gold rows are unwinnable by construction —
-8 release commits whose entire diff is `EXTRAVERSION = rc3 → ""` and one fix
-that only reorders a NULL check — which is why the honest next move is to
-re-attribute release-commit gold labels to the commits that actually changed the
-affected code (lifting the ceiling from 40 to 48) and to fix model conversion,
-which doubles the value of every LF already written.
-
-
+that vote is.
 
 ## Result
 
-The second thing these iterations taught us is that **votes are not labels**, and
+Using relatively simple LF's we were able to most related commits, and identified
+various aspects of repositories worth tracking (advisories and security notes, 
+release notes), simple code diffs, etc.,. 
+
+The Labeling Model (the derived model using the various LF's on the corpus) is 
+not particularly accurate in this case, in that we would expect a a reasonable
+number of FPs to dominate the TP's. 
+
+What this means is the iterations taught us is that **votes are not labels**, and
 the two numbers move independently. 
 
 The fundamental reason for this is that **so many** commits do not correspond to 
 a CVE, and so we have a lot more confidence in labelling that a commit does *not*
 include a CVE related commit than we do that a commit is related. When the positives
 (49) are so few as compared to the negatives this often happens. 
-
 
 
 ## Next Steps
@@ -126,6 +117,9 @@ Data Programming techniques.
 [A Good Tutorial and Overview of Snorkel](https://www.youtube.com/watch?v=JWAHTrHreeM&t=1159s)
 
 * Weak Supervision
+
+There are a couple of books on the subject, if you're really eager to dive
+into the topic. 
  
 * 
 
