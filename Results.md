@@ -51,19 +51,79 @@ data not trained against (to see how roobust the model is).
 
 ## Coverage Quality
 
-Each iteration of LF's increased our ability to find CVE related commits. 
+As expected, each iteration of LF's increased our ability to find CVE related commits. The baseline was 20 message-only LFs over 72,166 commits: regexes for CVE/(e.g. ('CVE-{\d+}'), etc.) GHSA ids, advisory language, and "fix + security <noun>" phrasing. That recovered a positive vote on only 9 of the 
+49 advisory-confirmed gold fixes. This is due to most fixes just saying something
+simple, such as "fixed struct X...". 
+
+Iteration 2 moved out of  reading messages in and of themselves and looked at
+the diffs, resulting in: — 18 LFs built as six vulnerability families
+× (CWE keywords, etc.) — which took gold votes from 9 to
+22. 
+
+The remaining gaps were *not* missing CWE classes. A "security" or
+"advisories" directory appearing in a commit's file list turned out to be the
+single best lever in the whole exercise — `lf_security_note_path` needs no diff
+at all, fires on 546 of 72,166 commits (0.76%, but that is a decent number of 
+FP's, although the percentage is low). This is likely due to repository specific 
+structures and notekeeping: all seven cpython `gh-151987` rows were recovered in one shot (+7, the largest single jump) simply because the project files its security notes under `Misc/NEWS.d/next/Security/`. 
+
+The remaining LF's looked at release notes and comments therein, taking coverage to 40 of 49.
+
+| Step | Mechanism / LF | LFs | Corpus cost | Gold votes | Majority | LabelModel |
+| --- | --- | --- | --- | --- | --- | --- |
+| Baseline (iter 1) | 20 message/metadata regexes | 20 | — | 9 of 49 | 9 | 2 |
+| Iter 2 | 18 diff LFs: 6 vuln families × surface/mitigation/conjunction | 38 | sample-based | 22 | 22 | 11 |
+| **A** (iter 3) | `lf_security_note_path` — commit touches a `security/`/`advisories/` dir **and** real code | 39 | 546 (0.76%), ~78 firings per gold hit | **+7 → 29** | 29 | 11 |
+| **B** (iter 4) | `lf_release_of_security_fix` — release commit whose range since the last release contains a positively-voted commit | 40 | 251 (0.35%), ~50 per hit | **+5 → 34** | 33 | 11 |
+| **C** (iter 5) | `lf_patch_cites_fix_commit` — changelog links the SHA of an already-labeled fix | 41 | 49 firings, ~25 per hit | **+2 → 36** | 33 | 11 |
+| **D** (iter 6) | `lf_diff_comment_names_concurrency_bug` — added *code comment* names a race / UAF / deadlock / TOCTOU | 42 | ~105 (0.27%) | **+1 → 37** | 34 | **12** |
+
+
+Coverage more than quadrupled (9 → 37) while
+LabelModel conversion crawled from 2 to 12, and it sat pinned at 11 for four
+consecutive iterations — A and B together added twelve gold votes and *zero*
+labels. The cause is structural, not a shortage of LFs: every positive LF learns
+an accuracy near 0.27 against a 0.068% base rate, so a single positive vote
+yields `prob_security` ≈ 0.27 and loses to the 0.5 threshold no matter how good
+that vote is. Iteration 6 proves the point in miniature — the LabelModel finally
+moved to 12, but *not* on the race-condition commit the LF was written for; the
+extra label was a commit that happened to collect a **second** positive vote,
+pushing it to 0.536. Two other results are worth carrying forward. First,
+several plausible ideas were killed by measurement rather than shipped on
+intuition: a CVE-id-in-changelog detector (C2) scored 0 gold for 18 firings
+without merges and 344 merge firings for a single row with them, and adding
+crypto, SSRF, deserialization or CSRF families would have returned exactly zero
+on this gold set. Second, 9 of the 49 gold rows are unwinnable by construction —
+8 release commits whose entire diff is `EXTRAVERSION = rc3 → ""` and one fix
+that only reorders a NULL check — which is why the honest next move is to
+re-attribute release-commit gold labels to the commits that actually changed the
+affected code (lifting the ceiling from 40 to 48) and to fix model conversion,
+which doubles the value of every LF already written.
 
 
 
 ## Result
 
+The second thing these iterations taught us is that **votes are not labels**, and
+the two numbers move independently. 
+
+The fundamental reason for this is that **so many** commits do not correspond to 
+a CVE, and so we have a lot more confidence in labelling that a commit does *not*
+include a CVE related commit than we do that a commit is related. When the positives
+(49) are so few as compared to the negatives this often happens. 
+
+
+
 ## Next Steps
 
-
+This was a contrived exercise to explore Weak-Supervision and related
+Data Programming techniques. 
 
 ## Resources
 
 * Snorkel
+
+[A Good Tutorial and Overview of Snorkel](https://www.youtube.com/watch?v=JWAHTrHreeM&t=1159s)
 
 * Weak Supervision
  
