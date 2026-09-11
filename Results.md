@@ -115,7 +115,11 @@ include a CVE related commit than we do that a commit is related. When the posit
 ## Next Steps
 
 This was a contrived exercise to explore Weak-Supervision and related
-Data Programming techniques. 
+Data Programming techniques. The next steps are to get into more real-life, 
+(meaning working with repositories we are more concerned with, projects
+that produce a lot of data, etc.).
+
+
 
 ## Resources
 
@@ -123,10 +127,15 @@ Data Programming techniques.
 
 [A Good Tutorial and Overview of Snorkel](https://www.youtube.com/watch?v=JWAHTrHreeM&t=1159s)
 
+Another, a bit older, though:
+https://ai.stanford.edu/blog/weak-supervision/
+
 * Weak Supervision
 
 There are a couple of books on the subject, if you're really eager to dive
-into the topic. 
+into the topic. A good one to start with seems:
+
+[Practical Weak Supervision](https://www.amazon.com/Weakly-Supervised-Learning-Doing-More/dp/1492077062/ref=sr_1_2?crid=6GCF1M4T853U&dib=eyJ2IjoiMSJ9.xnhgCyQE8tl0tW8vxwXZ65slHYTn2pTx6APxAQKa8tJZHiicZJn0wpFofHC94bdgcxXa5-SfLO4I-05X_Ra7zlm6RjEYJU8JG7qfATZgChCdt63BS0taUste780wb6GE4KjVZq7qz3QBytHkWMrvJ2Z7SQd0ppGsrrQXGCDI1R5HJmPZdcBHZoyWIXTzIMXzKyzQW78gSsVhD-XwLQDLnVybAqwnBhSw-xTuy46VjFs.mzBcXwh5OcFU1OGbhBApRzhTd_hi1mijdsXUHGZPeTs&dib_tag=se&keywords=weak+supervision&qid=1789133126&sprefix=weak+supervision%2Caps%2C133&sr=8-2)
  
-* 
+* Weak Supervision 
 
